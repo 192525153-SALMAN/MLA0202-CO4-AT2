@@ -1,0 +1,504 @@
+
+
+!pip install -q sklearn-crfsuite
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from sklearn_crfsuite import CRF
+from sklearn_crfsuite import metrics
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+
+print("============================================================")
+print(" V.SALMAN")
+print(" NAMED ENTITY RECOGNITION USING CONDITIONAL RANDOM FIELDS")
+print("============================================================")
+
+
+training_data = [
+
+    (
+        ["John", "ordered", "iPhone", "15", "with", "order", "ORD123"],
+        ["B-CUSTOMER", "O", "B-PRODUCT", "I-PRODUCT",
+         "O", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Sarah", "bought", "Samsung", "Galaxy", "S24", "order", "ORD456"],
+        ["B-CUSTOMER", "O", "B-PRODUCT", "I-PRODUCT",
+         "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["David", "received", "damaged", "MacBook", "Pro", "order", "ORD789"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "B-PRODUCT",
+         "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Priya", "wants", "refund", "for", "Redmi", "Note", "13", "order", "ORD321"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "O", "B-PRODUCT",
+         "I-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Arun", "reports", "broken", "OnePlus", "12", "order", "ORD654"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "B-PRODUCT",
+         "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Meena", "has", "payment", "issue", "with", "iPhone", "14", "order", "ORD111"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "I-ISSUE",
+         "O", "B-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Karthik", "received", "wrong", "product", "Samsung", "TV", "order", "ORD222"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "I-ISSUE",
+         "B-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Anjali", "cannot", "login", "to", "account", "order", "ORD333"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "O",
+         "O", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Rahul", "wants", "replacement", "for", "Samsung", "TV", "order", "ORD444"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "O",
+         "B-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Neha", "reports", "late", "delivery", "of", "Dell", "Laptop", "order", "ORD555"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "I-ISSUE",
+         "O", "B-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Vijay", "has", "refund", "problem", "with", "Realme", "phone", "order", "ORD666"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "I-ISSUE",
+         "O", "B-PRODUCT", "I-PRODUCT", "O", "B-ORDER_ID"]
+    ),
+
+    (
+        ["Aisha", "reports", "damaged", "Sony", "TV", "order", "ORD777"],
+        ["B-CUSTOMER", "O", "B-ISSUE", "B-PRODUCT",
+         "I-PRODUCT", "O", "B-ORDER_ID"]
+    )
+]
+
+
+for sentence, labels in training_data:
+    if len(sentence) != len(labels):
+        raise ValueError(
+            "Error: Number of words and labels are different."
+        )
+
+print("\nTraining samples:", len(training_data))
+
+
+
+def word_features(sentence, i):
+
+    word = sentence[i]
+
+    features = {
+        "word.lower": word.lower(),
+        "word[-2:]": word[-2:],
+        "word[-3:]": word[-3:],
+        "word.isupper": word.isupper(),
+        "word.istitle": word.istitle(),
+        "word.isdigit": word.isdigit(),
+        "word.length": len(word),
+        "contains_digit": any(c.isdigit() for c in word),
+        "contains_upper": any(c.isupper() for c in word),
+        "starts_with_capital": word[0].isupper()
+    }
+
+    # Previous word
+    if i > 0:
+
+        previous_word = sentence[i - 1]
+
+        features.update({
+            "previous.lower": previous_word.lower(),
+            "previous.istitle": previous_word.istitle(),
+            "previous.isupper": previous_word.isupper()
+        })
+
+    else:
+
+        features["BOS"] = True
+
+    # Next word
+    if i < len(sentence) - 1:
+
+        next_word = sentence[i + 1]
+
+        features.update({
+            "next.lower": next_word.lower(),
+            "next.istitle": next_word.istitle(),
+            "next.isupper": next_word.isupper()
+        })
+
+    else:
+
+        features["EOS"] = True
+
+    return features
+
+
+
+X_train = []
+y_train = []
+
+for sentence, labels in training_data:
+
+    sentence_features = []
+
+    for i in range(len(sentence)):
+
+        sentence_features.append(
+            word_features(sentence, i)
+        )
+
+    X_train.append(sentence_features)
+    y_train.append(labels)
+
+
+crf = CRF(
+    algorithm="lbfgs",
+    c1=0.1,
+    c2=0.1,
+    max_iterations=200,
+    all_possible_transitions=True
+)
+
+crf.fit(X_train, y_train)
+
+print("CRF model trained successfully.")
+
+
+test_sentence = [
+    "Rahul",
+    "ordered",
+    "iPhone",
+    "15",
+    "with",
+    "order",
+    "ORD999",
+    "and",
+    "reports",
+    "damaged",
+    "product"
+]
+
+
+test_features = []
+
+for i in range(len(test_sentence)):
+
+    test_features.append(
+        word_features(test_sentence, i)
+    )
+
+
+
+predicted_labels = crf.predict_single(
+    test_features
+)
+
+
+print("\n============================================================")
+print(" CUSTOMER SUPPORT MESSAGE")
+print("============================================================")
+
+print(" ".join(test_sentence))
+
+
+print("\n============================================================")
+print(" WORD-LEVEL ENTITY PREDICTION")
+print("============================================================")
+
+print(
+    f"{'WORD':<15}{'ENTITY LABEL':<20}"
+)
+
+print("-" * 35)
+
+for word, label in zip(
+    test_sentence,
+    predicted_labels
+):
+
+    print(
+        f"{word:<15}{label:<20}"
+    )
+
+print("\n============================================================")
+print(" EXTRACTED ENTITIES")
+print("============================================================")
+
+
+entities = []
+
+current_entity = []
+current_type = None
+
+
+for word, label in zip(
+    test_sentence,
+    predicted_labels
+):
+
+    if label.startswith("B-"):
+
+        # Save previous entity
+        if current_entity:
+
+            entities.append(
+                (
+                    current_type,
+                    " ".join(current_entity)
+                )
+            )
+
+        current_type = label[2:]
+        current_entity = [word]
+
+    elif label.startswith("I-"):
+
+        if current_entity:
+            current_entity.append(word)
+
+    else:
+
+        if current_entity:
+
+            entities.append(
+                (
+                    current_type,
+                    " ".join(current_entity)
+                )
+            )
+
+            current_entity = []
+            current_type = None
+
+
+# Save final entity
+if current_entity:
+
+    entities.append(
+        (
+            current_type,
+            " ".join(current_entity)
+        )
+    )
+
+
+for entity_type, entity_value in entities:
+
+    print(
+        f"{entity_type:<12}: {entity_value}"
+    )
+
+
+# ------------------------------------------------------------
+# STEP 11: EVALUATE MODEL
+# ------------------------------------------------------------
+
+y_pred = crf.predict(X_train)
+
+
+print("\n============================================================")
+print(" MODEL EVALUATION")
+print("============================================================")
+
+
+# Flatten labels
+true_labels = [
+    label
+    for sentence_labels in y_train
+    for label in sentence_labels
+]
+
+pred_labels = [
+    label
+    for sentence_labels in y_pred
+    for label in sentence_labels
+]
+
+
+# Calculate accuracy
+correct = 0
+
+for actual, predicted in zip(
+    true_labels,
+    pred_labels
+):
+
+    if actual == predicted:
+        correct += 1
+
+
+accuracy = (
+    correct / len(true_labels)
+) * 100
+
+
+print(
+    f"Training Accuracy: {accuracy:.2f}%"
+)
+
+
+evaluation_labels = [
+    "B-CUSTOMER",
+    "B-PRODUCT",
+    "I-PRODUCT",
+    "B-ORDER_ID",
+    "B-ISSUE",
+    "I-ISSUE"
+]
+
+
+print("\nClassification Report:\n")
+
+print(
+    metrics.flat_classification_report(
+        y_train,
+        y_pred,
+        labels=evaluation_labels,
+        zero_division=0
+    )
+)
+
+
+
+entity_count = {
+    "CUSTOMER": 0,
+    "PRODUCT": 0,
+    "ORDER_ID": 0,
+    "ISSUE": 0
+}
+
+
+for sentence, labels in training_data:
+
+    for label in labels:
+
+        if label.startswith("B-"):
+
+            entity_type = label[2:]
+
+            if entity_type in entity_count:
+
+                entity_count[entity_type] += 1
+
+
+print("\n============================================================")
+print(" ENTITY DISTRIBUTION")
+print("============================================================")
+
+for entity, count in entity_count.items():
+
+    print(
+        f"{entity:<12}: {count}"
+    )
+
+
+plt.figure(figsize=(9, 6))
+
+plt.bar(
+    list(entity_count.keys()),
+    list(entity_count.values())
+)
+
+plt.xlabel("Entity Type")
+plt.ylabel("Number of Entities")
+plt.title(
+    "Named Entity Distribution in Customer Support Dataset"
+)
+
+plt.tight_layout()
+plt.show()
+
+
+all_labels = [
+    "O",
+    "B-CUSTOMER",
+    "B-PRODUCT",
+    "I-PRODUCT",
+    "B-ORDER_ID",
+    "B-ISSUE",
+    "I-ISSUE"
+]
+
+
+cm = confusion_matrix(
+    true_labels,
+    pred_labels,
+    labels=all_labels
+)
+
+
+fig, ax = plt.subplots(
+    figsize=(10, 8)
+)
+
+
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=all_labels
+)
+
+
+disp.plot(
+    ax=ax,
+    xticks_rotation=45,
+    cmap="Blues"
+)
+
+
+plt.title(
+    "CRF Named Entity Recognition Confusion Matrix"
+)
+
+plt.tight_layout()
+plt.show()
+
+
+
+print("\n============================================================")
+print(" FINAL RESULT")
+print("============================================================")
+
+print("Customer Support NER completed successfully.")
+
+print("\nIdentified entities:")
+
+for entity_type, entity_value in entities:
+
+    print(
+        f"  {entity_type}: {entity_value}"
+    )
+
+print("\nThe program successfully demonstrates:")
+print("1. Word-level feature extraction")
+print("2. Conditional Random Field training")
+print("3. Entity prediction")
+print("4. Customer Name identification")
+print("5. Product Name identification")
+print("6. Order ID identification")
+print("7. Issue Type identification")
+print("8. Model performance evaluation")
+print("9. Entity distribution graph")
+print("10. Confusion matrix")
+
+print("\n============================================================")
+print("                 PROGRAM COMPLETED")
+print("============================================================")
