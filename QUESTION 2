@@ -1,0 +1,355 @@
+print("V.SALMAN")
+
+import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
+
+print("============================================================")
+print("       PREDICTIVE MACHINE MAINTENANCE USING HMM")
+print("============================================================")
+
+
+states = [
+    "Healthy",
+    "Warning",
+    "Critical"
+]
+
+
+observations = [
+    "Normal",
+    "High",
+    "Critical"
+]
+
+initial_probability = {
+    "Healthy": 0.70,
+    "Warning": 0.20,
+    "Critical": 0.10
+}
+
+
+transition_probability = {
+
+    "Healthy": {
+        "Healthy": 0.80,
+        "Warning": 0.18,
+        "Critical": 0.02
+    },
+
+    "Warning": {
+        "Healthy": 0.15,
+        "Warning": 0.65,
+        "Critical": 0.20
+    },
+
+    "Critical": {
+        "Healthy": 0.05,
+        "Warning": 0.15,
+        "Critical": 0.80
+    }
+}
+
+
+emission_probability = {
+
+    "Healthy": {
+        "Normal": 0.90,
+        "High": 0.09,
+        "Critical": 0.01
+    },
+
+    "Warning": {
+        "Normal": 0.20,
+        "High": 0.60,
+        "Critical": 0.20
+    },
+
+    "Critical": {
+        "Normal": 0.02,
+        "High": 0.18,
+        "Critical": 0.80
+    }
+}
+
+
+observed_sequence = [
+    "Normal",
+    "Normal",
+    "High",
+    "High",
+    "Critical",
+    "Critical",
+    "Critical"
+]
+
+print("\nSensor Observation Sequence:")
+print(" -> ".join(observed_sequence))
+
+
+
+def viterbi(observations):
+
+    number_of_observations = len(observations)
+    number_of_states = len(states)
+
+    probability = np.zeros(
+        (number_of_states, number_of_observations)
+    )
+
+    path = np.zeros(
+        (number_of_states, number_of_observations),
+        dtype=int
+    )
+-
+
+    for i, state in enumerate(states):
+
+        probability[i, 0] = (
+            initial_probability[state]
+            * emission_probability[state][observations[0]]
+        )
+
+        path[i, 0] = 0
+
+  
+
+    for t in range(1, number_of_observations):
+
+        for current_index, current_state in enumerate(states):
+
+            probabilities = []
+
+            for previous_index, previous_state in enumerate(states):
+
+                value = (
+                    probability[
+                        previous_index,
+                        t - 1
+                    ]
+                    * transition_probability[
+                        previous_state
+                    ][
+                        current_state
+                    ]
+                )
+
+                probabilities.append(value)
+
+            best_previous_state = np.argmax(probabilities)
+
+            probability[
+                current_index,
+                t
+            ] = (
+                probabilities[best_previous_state]
+                * emission_probability[
+                    current_state
+                ][
+                    observations[t]
+                ]
+            )
+
+            path[
+                current_index,
+                t
+            ] = best_previous_state
+
+  
+
+    best_final_state = np.argmax(
+        probability[:, -1]
+    )
+
+    best_path = [
+        best_final_state
+    ]
+
+    for t in range(
+        number_of_observations - 1,
+        0,
+        -1
+    ):
+
+        best_final_state = path[
+            best_final_state,
+            t
+        ]
+
+        best_path.append(
+            best_final_state
+        )
+
+    best_path.reverse()
+
+    return [
+        states[index]
+        for index in best_path
+    ], probability
+
+predicted_states, viterbi_probability = viterbi(
+    observed_sequence
+)
+
+print("\n============================================================")
+print("             PREDICTED HIDDEN STATES")
+print("============================================================")
+
+for i in range(len(observed_sequence)):
+
+    print(
+        f"Observation {i + 1}: "
+        f"{observed_sequence[i]:<10} "
+        f"-> Machine State: "
+        f"{predicted_states[i]}"
+    )
+
+
+print("\n============================================================")
+print("             MAINTENANCE RECOMMENDATION")
+print("============================================================")
+
+critical_count = predicted_states.count("Critical")
+warning_count = predicted_states.count("Warning")
+
+if critical_count >= 2:
+
+    print("ALERT: Machine is in CRITICAL condition.")
+    print("Recommendation: Schedule immediate maintenance.")
+
+elif warning_count >= 2:
+
+    print("WARNING: Machine shows signs of degradation.")
+    print("Recommendation: Schedule preventive maintenance.")
+
+else:
+
+    print("Machine condition is HEALTHY.")
+    print("Recommendation: Continue regular monitoring.")
+
+transition_matrix = np.array([
+    [
+        transition_probability[from_state][to_state]
+        for to_state in states
+    ]
+    for from_state in states
+])
+
+print("\n============================================================")
+print("                 TRANSITION MATRIX")
+print("============================================================")
+
+print(transition_matrix)
+
+emission_matrix = np.array([
+    [
+        emission_probability[state][observation]
+        for observation in observations
+    ]
+    for state in states
+])
+
+print("\n============================================================")
+print("                  EMISSION MATRIX")
+print("============================================================")
+
+print(emission_matrix)
+
+G = nx.DiGraph()
+
+for state in states:
+    G.add_node(state)
+
+for from_state in states:
+
+    for to_state in states:
+
+        probability_value = transition_probability[
+            from_state
+        ][
+            to_state
+        ]
+
+        if probability_value > 0.05:
+
+            G.add_edge(
+                from_state,
+                to_state,
+                weight=probability_value
+            )
+
+position = {
+    "Healthy": (-1, 0),
+    "Warning": (0, 0),
+    "Critical": (1, 0)
+}
+
+plt.figure(figsize=(12, 6))
+
+nx.draw(
+    G,
+    position,
+    with_labels=True,
+    node_size=4000,
+    node_color="lightgreen",
+    font_size=11,
+    font_weight="bold",
+    arrows=True,
+    arrowsize=20
+)
+
+edge_labels = nx.get_edge_attributes(
+    G,
+    "weight"
+)
+
+edge_labels = {
+    edge: f"{value:.2f}"
+    for edge, value in edge_labels.items()
+}
+
+nx.draw_networkx_edge_labels(
+    G,
+    position,
+    edge_labels=edge_labels
+)
+
+plt.title("Hidden Markov Model for Predictive Machine Maintenance")
+plt.axis("off")
+plt.show()
+
+
+
+state_numbers = {
+    "Healthy": 0,
+    "Warning": 1,
+    "Critical": 2
+}
+
+numeric_states = [
+    state_numbers[state]
+    for state in predicted_states
+]
+
+plt.figure(figsize=(10, 6))
+
+plt.plot(
+    range(1, len(numeric_states) + 1),
+    numeric_states,
+    marker="o"
+)
+
+plt.yticks(
+    [0, 1, 2],
+    ["Healthy", "Warning", "Critical"]
+)
+
+plt.xlabel("Observation Number")
+plt.ylabel("Predicted Machine State")
+plt.title("Predicted Machine Condition Over Time")
+
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+print("\nProgram completed successfully.")
